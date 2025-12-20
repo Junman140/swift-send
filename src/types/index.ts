@@ -1,0 +1,38 @@
+export interface User {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  balance: number;
+}
+
+export interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  avatar?: string;
+  country: string;
+  countryCode: string;
+}
+
+export interface Transaction {
+  id: string;
+  type: 'send' | 'receive';
+  amount: number;
+  fee: number;
+  recipientAmount: number;
+  recipientName: string;
+  recipientPhone: string;
+  status: 'pending' | 'completed' | 'failed';
+  timestamp: Date;
+  exchangeRate?: number;
+  destinationCurrency?: string;
+}
+
+export interface FeeBreakdown {
+  networkFee: number;
+  serviceFee: number;
+  exchangeRate: number;
+  totalFee: number;
+  recipientGets: number;
+}
