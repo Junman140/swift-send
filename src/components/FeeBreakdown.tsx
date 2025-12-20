@@ -1,4 +1,4 @@
-import { Info, Zap, Shield, ArrowRight, HelpCircle } from 'lucide-react';
+import { Info, Zap, Shield, ArrowRight, HelpCircle, Star, Globe2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FeeBreakdownProps {
@@ -30,10 +30,13 @@ export function FeeBreakdown({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Info className="w-4 h-4 text-primary" />
-          Cost Breakdown
+          <Info className="w-4 h-4 text-blue-600" />
+          Fee Transparency
         </div>
-        <span className="text-xs text-muted-foreground">Always transparent</span>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Star className="w-3 h-3 text-blue-500" />
+          <span>Stellar Network</span>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -47,16 +50,16 @@ export function FeeBreakdown({
         <div className="space-y-2">
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Zap className="w-4 h-4 text-yellow-500" />
-              <span>Network fee (Near zero)</span>
+              <Star className="w-4 h-4 text-blue-500" />
+              <span>Stellar network fee</span>
             </div>
-            <span className="font-medium text-foreground">${networkFee.toFixed(3)}</span>
+            <span className="font-medium text-foreground">${networkFee.toFixed(4)}</span>
           </div>
 
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Shield className="w-4 h-4 text-blue-500" />
-              <span>SwiftSend fee (0.2%)</span>
+              <Shield className="w-4 h-4 text-green-500" />
+              <span>Service fee (0.5%)</span>
             </div>
             <span className="font-medium text-foreground">${serviceFee.toFixed(2)}</span>
           </div>
@@ -75,38 +78,41 @@ export function FeeBreakdown({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ArrowRight className="w-5 h-5 text-green-600" />
-            <span className="font-semibold text-foreground">Recipient gets</span>
+            <span className="font-semibold text-foreground">Recipient receives</span>
           </div>
           <span className="text-2xl font-bold text-green-600">
-            ${recipientGets.toFixed(2)}
+            ${recipientGets.toFixed(2)} USDC
           </span>
         </div>
         <p className="text-xs text-green-600 dark:text-green-400 mt-1 ml-7">
-          Arrives in seconds • Guaranteed amount
+          Settles in 3-5 seconds • 1:1 USD backed • Final amount guaranteed
         </p>
       </div>
 
-      {/* Savings comparison */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200/50 dark:border-blue-800/50">
-        <div className="flex items-center gap-2 mb-2">
-          <HelpCircle className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-            Why SwiftSend?
+      {/* Professional comparison */}
+      <div className="bg-slate-50 dark:bg-slate-900/30 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-2 mb-3">
+          <Globe2 className="w-4 h-4 text-slate-600" />
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            Institutional-Grade Infrastructure
           </span>
         </div>
         <div className="grid grid-cols-2 gap-4 text-xs">
           <div>
-            <p className="text-blue-600 dark:text-blue-400 font-medium">Traditional banks</p>
-            <p className="text-blue-700 dark:text-blue-300">
-              ~${savingsVsTraditional.toFixed(2)} fee • {timeVsTraditional}
+            <p className="text-slate-600 dark:text-slate-400 font-medium">Traditional Wire</p>
+            <p className="text-slate-700 dark:text-slate-300">
+              $15-45 fee • 1-3 business days
             </p>
           </div>
           <div>
-            <p className="text-green-600 dark:text-green-400 font-medium">SwiftSend</p>
-            <p className="text-green-700 dark:text-green-300">
-              ${totalFee.toFixed(2)} fee • ~5 seconds
+            <p className="text-blue-600 dark:text-blue-400 font-medium">Stellar Network</p>
+            <p className="text-blue-700 dark:text-blue-300">
+              ${totalFee.toFixed(2)} fee • 3-5 seconds
             </p>
           </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400">
+          Powered by Stellar's global payment network with 99.99% uptime and bank-grade security
         </div>
       </div>
     </div>

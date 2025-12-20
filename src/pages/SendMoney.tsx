@@ -8,7 +8,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/contexts/AuthContext';
 import { contacts, calculateFees } from '@/data/mockData';
 import { Contact } from '@/types';
-import { ArrowLeft, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Step = 'recipient' | 'amount' | 'confirm' | 'success';
@@ -399,24 +399,25 @@ export default function SendMoney() {
               {/* Transfer Summary */}
               <div className="bg-card rounded-2xl p-6 shadow-soft">
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-2xl font-bold text-primary-foreground mb-4">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-2xl font-bold text-white mb-4">
                     {selectedContact ? 
                       selectedContact.name.charAt(0) : 
                       (newRecipient?.name?.charAt(0) || '?')
                     }
                   </div>
                   <h2 className="text-lg font-semibold text-foreground mb-1">
-                    Confirm your transfer
+                    Review Your Transfer
                   </h2>
-                  <p className="text-muted-foreground text-sm">
-                    Review details before sending
-                  </p>
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Star className="w-4 h-4 text-blue-500" />
+                    <span>Powered by Stellar Network</span>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">You're sending</span>
-                    <span className="text-2xl font-bold text-foreground">${parseFloat(amount).toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-foreground">${parseFloat(amount).toFixed(2)} USDC</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -431,10 +432,28 @@ export default function SendMoney() {
                     </div>
                   </div>
 
+                  {/* Network Information */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-blue-600" />
+                        <span className="font-medium text-blue-900 dark:text-blue-100">Settlement Time</span>
+                      </div>
+                      <span className="text-blue-700 dark:text-blue-300 font-semibold">3-5 seconds</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm mt-1">
+                      <div className="flex items-center gap-2">
+                        <Globe2 className="w-4 h-4 text-blue-600" />
+                        <span className="font-medium text-blue-900 dark:text-blue-100">Network</span>
+                      </div>
+                      <span className="text-blue-700 dark:text-blue-300 font-semibold">Stellar Mainnet</span>
+                    </div>
+                  </div>
+
                   <div className="border-t border-border pt-4">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">They will receive</span>
-                      <span className="text-2xl font-bold text-success">${fees.recipientGets.toFixed(2)}</span>
+                      <span className="text-2xl font-bold text-green-600">${fees.recipientGets.toFixed(2)} USDC</span>
                     </div>
                   </div>
                 </div>

@@ -118,17 +118,17 @@ export function TransactionItem({ transaction, onClick, showDetailedView = false
           <div className="text-center">
             {transaction.status === 'completed' && (
               <p className="text-xs text-green-600 dark:text-green-400">
-                ✅ Transfer completed successfully
+                ✅ Settled on Stellar network • Transaction confirmed
               </p>
             )}
             {transaction.status === 'pending' && (
               <p className="text-xs text-orange-600 dark:text-orange-400">
-                ⏳ Transfer in progress...
+                ⏳ Processing on Stellar network • 3-5 seconds remaining
               </p>
             )}
             {transaction.status === 'failed' && (
               <p className="text-xs text-red-600 dark:text-red-400">
-                ❌ Transfer failed - funds returned to your account
+                ❌ Transaction failed • USDC returned to your wallet
               </p>
             )}
           </div>

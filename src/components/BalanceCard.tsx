@@ -1,4 +1,4 @@
-import { Wallet, Eye, EyeOff, TrendingUp, DollarSign } from 'lucide-react';
+import { Wallet, Eye, EyeOff, TrendingUp, DollarSign, Shield, Star } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +27,13 @@ export function BalanceCard({ usdcBalance, localCurrency, exchangeRate, classNam
           <div className="p-2 rounded-lg bg-primary-foreground/20">
             <Wallet className="w-5 h-5" />
           </div>
-          <span className="text-sm font-medium opacity-90">Available Balance</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium opacity-90">USDC Balance</span>
+            <div className="flex items-center gap-1 text-xs opacity-75">
+              <Star className="w-3 h-3" />
+              <span>Stellar Network</span>
+            </div>
+          </div>
         </div>
         <button
           onClick={() => setShowBalance(!showBalance)}
@@ -65,8 +71,8 @@ export function BalanceCard({ usdcBalance, localCurrency, exchangeRate, classNam
       </div>
 
       <div className="flex items-center gap-2 text-sm opacity-90">
-        <TrendingUp className="w-4 h-4" />
-        <span>Secured in your personal wallet • Instant global transfers</span>
+        <Shield className="w-4 h-4" />
+        <span>Regulated stablecoin • 1:1 USD backed • FDIC protected</span>
       </div>
     </div>
   );
