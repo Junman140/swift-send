@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WalletProvider } from "./contexts/WalletContext";
+import { ComplianceProvider } from "./contexts/ComplianceContext";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import SendMoney from "./pages/SendMoney";
@@ -15,6 +16,8 @@ import CashOutOptions from "./pages/CashOutOptions";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import { VerificationFlow } from "./components/VerificationFlow";
+import ComplianceInfo from "./pages/ComplianceInfo";
 
 const queryClient = new QueryClient();
 
@@ -96,6 +99,22 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/verification"
+        element={
+          <ProtectedRoute>
+            <VerificationFlow />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/compliance-info"
+        element={
+          <ProtectedRoute>
+            <ComplianceInfo />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -106,11 +125,13 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <WalletProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <ComplianceProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </ComplianceProvider>
         </WalletProvider>
       </AuthProvider>
     </TooltipProvider>

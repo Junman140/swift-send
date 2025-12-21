@@ -7,11 +7,13 @@ import { FeeBreakdown } from '@/components/FeeBreakdown';
 import { BottomNav } from '@/components/BottomNav';
 import TransactionSigningDialog from '@/components/TransactionSigning';
 import { WalletStatusIndicator } from '@/components/WalletConnection';
+import { CompliancePreCheck } from '@/components/ComplianceCheck';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
+import { useCompliance } from '@/contexts/ComplianceContext';
 import { contacts, calculateFees } from '@/data/mockData';
 import { Contact, TransactionPreview } from '@/types';
-import { ArrowLeft, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Clock, Wallet, MapPin } from 'lucide-react';
+import { ArrowLeft, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Clock, Wallet, MapPin, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Step = 'recipient' | 'amount' | 'confirm' | 'success';
@@ -27,6 +29,7 @@ export default function SendMoney() {
   const navigate = useNavigate();
   const { user, updateBalance } = useAuth();
   const { connectionState } = useWallet();
+  const { checkTransactionCompliance } = useCompliance();
   const [step, setStep] = useState<Step>('recipient');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [newRecipient, setNewRecipient] = useState<NewRecipient | null>(null);
@@ -412,6 +415,48 @@ export default function SendMoney() {
                   )}
                 </div>
 
+                {/* Compliance Check for Amount */}
+                {amount && parseFloat(amount) > 0 && (
+                  (() => {
+                    const complianceCheck = checkTransactionCompliance(
+                      parseFloat(amount), 
+                      selectedContact?.countryCode || 'US'
+                    );
+                    
+                    if (complianceCheck.warnings.length > 0 || !complianceCheck.canProceed) {
+                      return (
+                        <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div className="text-left">
+                              {complianceCheck.requirements.length > 0 && (
+                                <div className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
+                                  {complianceCheck.requirements.map((req, idx) => (
+                                    <p key={idx}>• {req}</p>
+                                  ))}
+                                </div>
+                              )}
+                              {complianceCheck.warnings.length > 0 && (
+                                <div className="text-xs text-amber-700 dark:text-amber-300 mt-1 space-y-1">
+                                  {complianceCheck.warnings.map((warning, idx) => (
+                                    <p key={idx}>• {warning}</p>
+                                  ))}
+                                </div>
+                              )}
+                              {complianceCheck.upgradeIncentive && (
+                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 font-medium">
+                                  💡 {complianceCheck.upgradeIncentive}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()
+                )}
+
                 {/* Quick Amount Buttons */}
                 <div className="flex gap-2 justify-center mt-6">
                   {[10, 25, 50, 100].map((quickAmount) => (
@@ -439,17 +484,49 @@ export default function SendMoney() {
                     recipientGets={fees.recipientGets}
                   />
                   
-                  {/* Trust Indicators */}
-                  <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
-                    <div className="text-center space-y-2">
-                      <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                        ⚡ Instant Transfer • 🔒 Secure • 💰 Low Cost
-                      </p>
-                      <p className="text-xs text-green-600 dark:text-green-300">
-                        {selectedContact ? 'Contact will receive money in seconds' : 'Recipient will get a secure link to claim their money'}
-                      </p>
-                    </div>
-                  </div>
+                  {/* Compliance Check Display */}
+                  {parseFloat(amount) > 0 && (() => {
+                    const recipientCountry = selectedContact?.countryCode || newRecipient?.name || 'US';
+                    const complianceCheck = checkTransactionCompliance(parseFloat(amount), recipientCountry);
+                    
+                    if (complianceCheck.warnings.length > 0 || !complianceCheck.canProceed) {
+                      return (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                                {!complianceCheck.canProceed ? 'Transfer Requires Review' : 'Transfer Notice'}
+                              </h4>
+                              {complianceCheck.warnings.map((warning, index) => (
+                                <p key={index} className="text-sm text-amber-700 dark:text-amber-300">
+                                  {warning}
+                                </p>
+                              ))}
+                              {complianceCheck.upgradeIncentive && (
+                                <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">
+                                  💡 {complianceCheck.upgradeIncentive}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
+                        <div className="text-center space-y-2">
+                          <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                            ⚡ Instant Transfer • 🔒 Secure • 💰 Low Cost
+                          </p>
+                          <p className="text-xs text-green-700 dark:text-green-300">
+                            Transfer within your account limits • Bank-grade security
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -631,25 +708,30 @@ export default function SendMoney() {
               )}
 
               {/* Final CTA */}
-              <Button
-                variant="hero"
-                size="lg"
-                className="w-full"
-                onClick={handleConfirmSend}
-                disabled={isProcessing}
+              <CompliancePreCheck
+                amount={parseFloat(amount)}
+                destination={selectedContact?.countryCode || newRecipient?.name || 'US'}
               >
-                {isProcessing ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"></div>
-                    <span>Sending money...</span>
-                  </div>
-                ) : (
-                  <>
-                    <Send className="w-5 h-5" />
-                    Send ${parseFloat(amount).toFixed(2)}
-                  </>
-                )}
-              </Button>
+                <Button
+                  variant="hero"
+                  size="lg"
+                  className="w-full"
+                  onClick={handleConfirmSend}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"></div>
+                      <span>Sending money...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Send ${parseFloat(amount).toFixed(2)}
+                    </>
+                  )}
+                </Button>
+              </CompliancePreCheck>
 
               <p className="text-xs text-center text-muted-foreground">
                 By confirming, you authorize this transfer from your personal wallet

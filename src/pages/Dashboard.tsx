@@ -7,6 +7,7 @@ import { TransactionItem } from '@/components/TransactionItem';
 import { BottomNav } from '@/components/BottomNav';
 import WalletConnectionDialog, { WalletStatusIndicator, WalletBalanceCard } from '@/components/WalletConnection';
 import { WalletTransactionHistory } from '@/components/TransactionSigning';
+import { ComplianceDashboard } from '@/components/ComplianceDashboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { transactions } from '@/data/mockData';
@@ -97,6 +98,9 @@ export default function Dashboard() {
             localCurrency={user?.localCurrency || 'USD'}
             exchangeRate={user?.exchangeRate || 1.0}
           />
+
+          {/* Compliance Dashboard - Compact View */}
+          <ComplianceDashboard compact={true} showUpgradePrompt={true} />
 
           {/* How It Works - Brief Overview */}
           {isNewUser && (

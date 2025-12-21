@@ -15,6 +15,10 @@ export interface User {
   externalWalletConnected?: boolean;
   preferExternalWallet?: boolean;
   walletConnectionStatus?: 'none' | 'connected' | 'disconnected';
+  // Compliance information
+  complianceTier?: string;
+  verificationLevel?: 'basic' | 'enhanced' | 'full';
+  kycStatus?: 'pending' | 'verified' | 'rejected' | 'expired';
 }
 
 export interface AuthUser {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/BottomNav';
 import WalletConnectionDialog, { WalletStatusIndicator } from '@/components/WalletConnection';
+import { ComplianceDashboard } from '@/components/ComplianceDashboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import {
@@ -46,7 +47,12 @@ export default function Profile() {
         <WalletStatusIndicator />
       ) : null
     },
-    { icon: Shield, label: 'Security', onClick: () => {} },
+    { 
+      icon: Shield, 
+      label: 'Account Verification & Limits', 
+      onClick: () => navigate('/verification'),
+      description: 'View your account status and upgrade limits'
+    },
     { icon: Bell, label: 'Notifications', onClick: () => {} },
     { icon: HelpCircle, label: 'Help & Support', onClick: () => {} },
   ];
@@ -184,12 +190,17 @@ export default function Profile() {
             )}
           </div>
 
+          {/* Compliance Dashboard */}
+          <div className="animate-slide-up" style={{ animationDelay: '90ms' }}>
+            <ComplianceDashboard compact={false} showUpgradePrompt={true} />
+          </div>
+
           {/* Menu Items */}
           <div
             className="bg-card rounded-2xl shadow-soft overflow-hidden animate-slide-up"
             style={{ animationDelay: '100ms' }}
           >
-            {menuItems.map(({ icon: Icon, label, onClick, rightContent }, index) => (
+            {menuItems.map(({ icon: Icon, label, onClick, rightContent, description }, index) => (
               <button
                 key={label}
                 onClick={onClick}
@@ -199,7 +210,12 @@ export default function Profile() {
                   <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
                     <Icon className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <span className="font-medium text-foreground">{label}</span>
+                  <div className="text-left">
+                    <div className="font-medium text-foreground">{label}</div>
+                    {description && (
+                      <div className="text-sm text-muted-foreground">{description}</div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {rightContent}
