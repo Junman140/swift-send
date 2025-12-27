@@ -1,0 +1,118 @@
+openapi: 3.0.3
+info:
+  title: SwiftSend Remittance API (Prototype)
+  version: '0.1.0'
+  description: Core endpoints for transfers, wallets, and escrow (prototype-level).
+servers:
+  - url: http://localhost:4000
+
+paths:
+  /transfers:
+    post:
+      summary: Create a transfer (idempotent)
+      operationId: createTransfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransfer'
+      responses:
+        '201':
+          description: Transfer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transfer'
+        '400':
+          description: Validation error
+
+  /transfers/{id}:
+    get:
+      summary: Get transfer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transfer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transfer'
+        '404':
+          description: Not found
+
+  /escrow/{transferId}/release:
+    post:
+      summary: Release escrow for a transfer
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Escrow released
+        '404':
+          description: Not found
+
+  /escrow/{transferId}/refund:
+    post:
+      summary: Refund escrow for a transfer
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Escrow refunded
+        '404':
+          description: Not found
+
+components:
+  schemas:
+    CreateTransfer:
+      type: object
+      required: [idempotency_key, from_wallet_id, amount, currency, to]
+      properties:
+        idempotency_key:
+          type: string
+        from_wallet_id:
+          type: string
+        to:
+          type: object
+          properties:
+            contact_id:
+              type: string
+            wallet_public_key:
+              type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        method:
+          type: string
+        metadata:
+          type: object
+    Transfer:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        created_at:
+          type: string
+        escrow_id:
+          type: string
