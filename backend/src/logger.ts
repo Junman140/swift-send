@@ -1,11 +1,15 @@
-export function info(...args: any[]) {
-  console.log(new Date().toISOString(), 'INFO', ...args);
-}
+import pino from 'pino';
+import { config } from './config';
 
-export function warn(...args: any[]) {
-  console.warn(new Date().toISOString(), 'WARN', ...args);
-}
+export const logger = pino({
+  level: config.logging.level,
+  base: { service: 'swiftsend-backend', env: config.env },
+  transport: config.logging.pretty
+    ? {
+        target: 'pino-pretty',
+        options: { colorize: true, translateTime: 'SYS:standard' }
+      }
+    : undefined,
+});
 
-export function error(...args: any[]) {
-  console.error(new Date().toISOString(), 'ERROR', ...args);
-}
+export const createLogger = (bindings: Record<string, unknown>) => logger.child(bindings);

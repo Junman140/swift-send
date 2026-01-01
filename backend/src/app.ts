@@ -4,20 +4,22 @@ import healthRoutes from './routes/health';
 import transferRoutes from './routes/transfers';
 import escrowRoutes from './routes/escrow';
 import { config } from './config';
-import { info } from './logger';
+import { logger } from './logger';
+import { createContainer } from './container';
 
 export function buildApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger });
+  const container = createContainer();
+
+  app.decorate('container', container);
   app.register(cors, { origin: true });
 
-  // register routes
-  app.register(healthRoutes);
-  app.register(transferRoutes);
-  app.register(escrowRoutes);
+  app.register(healthRoutes, { prefix: container.config.server.basePath });
+  app.register(transferRoutes, { prefix: container.config.server.basePath });
+  app.register(escrowRoutes, { prefix: container.config.server.basePath });
 
-  // basic readiness
   app.addHook('onClose', async () => {
-    info('Server closing');
+    logger.info('Server shutting down');
   });
 
   return app;
@@ -25,5 +27,5 @@ export function buildApp() {
 
 export async function start() {
   const app = buildApp();
-  await app.listen({ port: config.port, host: '0.0.0.0' });
+  await app.listen({ port: config.server.port, host: config.server.host });
 }
