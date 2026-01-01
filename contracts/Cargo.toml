@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "remittance-escrow",
+    "wallet-registry",
+    "compliance-limits"
+]
+resolver = "2"
