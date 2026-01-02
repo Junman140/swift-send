@@ -14,6 +14,7 @@ CONTRACT_COMPLIANCE_LIMITS=CANLC4Z5ZWFTPVM2CJCLM3O7GGOWJJEMFHDTC3H77SO2TXEB3MFMH
 
 # Contract Creator Account
 STELLAR_CONTRACT_CREATOR=GABUKS5YQ62VV5FWSYDGGAH32U3GZLXQK6BVFK4CDZJPEEWZTMJTJ75Z
+STELLAR_ADMIN_ACCOUNT=GCDL3VIGXFFSU7EB2R6VT2N6UCDMIT2UOPKLPKG4UXCBCSUVPWUTLNFH
 ```
 
 ## Contract Deployment Summary
@@ -23,33 +24,49 @@ STELLAR_CONTRACT_CREATOR=GABUKS5YQ62VV5FWSYDGGAH32U3GZLXQK6BVFK4CDZJPEEWZTMJTJ75
 - **Contract ID**: `CA7JEZGXWTX62LE6HSW7C6DQHDFNEKEFYI2AYNXU67AJPKIKNRINTCHB`
 - **WASM Hash**: `f27c656e8f36e19f7b7a5eae07ca1970e992239748103020e7441b8a3721a7e3`
 - **Transaction**: `9d6d151f84799cc4793286851efdfb8bef14a993b281c9e5d00d41fb2be93f87`
+- **Explorer**: [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CA7JEZGXWTX62LE6HSW7C6DQHDFNEKEFYI2AYNXU67AJPKIKNRINTCHB)
+- **Creator**: `GABUKS5YQ62VV5FWSYDGGAH32U3GZLXQK6BVFK4CDZJPEEWZTMJTJ75Z`
 
 ### ✅ Access Guard
 - **Deployed**: 2026-01-02 07:01:41 UTC
 - **Contract ID**: `CDPOR7XAJDYSPCQMLM5AJESL4IOC7L2J34GW5UKSTC6NX7Z4GG53OLEF`
 - **WASM Hash**: `856f52a845878338f373779b5b94f85c6f7b263f994102e9679a00ee080722de`
 - **Transaction**: `018fe3a65a38056df659edcc55346678c368a230532849023d95652cb09053d1`
+- **Explorer**: [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDPOR7XAJDYSPCQMLM5AJESL4IOC7L2J34GW5UKSTC6NX7Z4GG53OLEF)
+- **Creator**: `GABUKS5YQ62VV5FWSYDGGAH32U3GZLXQK6BVFK4CDZJPEEWZTMJTJ75Z`
 
 ### ✅ Remittance Escrow
 - **Deployed**: 2026-01-02 08:30:00 UTC  
 - **Contract ID**: `CDBLWJKQLC2XVKVT7K3T2ZAIJGI7K7XRK6YMMHBBSWQI42WUZZHNQL4I`
 - **WASM Hash**: `6ece061686f37fa07ae65449770c63534a3dd8bc52fb77061832567b89d77fd2`
 - **Transaction**: `c95728c6d20e66a56f1fcd1d4f341665f4d7e9229016e334afc3a91877f503bd`
+- **Explorer**: [Stellar Expert](https://stellar.expert/explorer/testnet/tx/c95728c6d20e66a56f1fcd1d4f341665f4d7e9229016e334afc3a91877f503bd)
+- **Lab**: [Stellar Lab](https://lab.stellar.org/r/testnet/contract/CDBLWJKQLC2XVKVT7K3T2ZAIJGI7K7XRK6YMMHBBSWQI42WUZZHNQL4I)
 - **Admin**: `GCDL3VIGXFFSU7EB2R6VT2N6UCDMIT2UOPKLPKG4UXCBCSUVPWUTLNFH`
+- **Source**: `contracts/remittance-escrow`
+- **Purpose**: Transfer intents, state transitions, and event emissions
 
 ### ✅ Wallet Registry
 - **Deployed**: 2026-01-02 08:45:00 UTC
 - **Contract ID**: `CDQL3FUWWZIKRDXSU4UP3PXM75GB6IHZRB2RPFSL3KQ6IEPWXA3FQVKS`
 - **WASM Hash**: `e3cef8302ce0e29ee4e5979b3f43a153dc2623746ce9270e7a7f61da948840a9`
 - **Transaction**: `59882494536c61eec6301fb0e9c2f5301b36b9b2d0b257c0ca6ab26ee38fd29e`
+- **Explorer**: [Stellar Expert](https://stellar.expert/explorer/testnet/tx/59882494536c61eec6301fb0e9c2f5301b36b9b2d0b257c0ca6ab26ee38fd29e)
+- **Lab**: [Stellar Lab](https://lab.stellar.org/r/testnet/contract/CDQL3FUWWZIKRDXSU4UP3PXM75GB6IHZRB2RPFSL3KQ6IEPWXA3FQVKS)
 - **Admin**: `GCDL3VIGXFFSU7EB2R6VT2N6UCDMIT2UOPKLPKG4UXCBCSUVPWUTLNFH`
+- **Source**: `contracts/wallet-registry`
+- **Purpose**: User-to-wallet mapping with guardian support
 
 ### ✅ Compliance Limits
 - **Deployed**: 2026-01-02 09:00:00 UTC
 - **Contract ID**: `CANLC4Z5ZWFTPVM2CJCLM3O7GGOWJJEMFHDTC3H77SO2TXEB3MFMHFJQ`
 - **WASM Hash**: `2bb460f3a9fc88037ff454e284118694dd6bf2b12e602a0fadf18bf270fb619c`
 - **Transaction**: `a26318318b94facd32c517e54614360c20a3e3e7cbef32aaa4a184e526d1a11e`
+- **Explorer**: [Stellar Expert](https://stellar.expert/explorer/testnet/tx/a26318318b94facd32c517e54614360c20a3e3e7cbef32aaa4a184e526d1a11e)
+- **Lab**: [Stellar Lab](https://lab.stellar.org/r/testnet/contract/CANLC4Z5ZWFTPVM2CJCLM3O7GGOWJJEMFHDTC3H77SO2TXEB3MFMHFJQ)
 - **Admin**: `GCDL3VIGXFFSU7EB2R6VT2N6UCDMIT2UOPKLPKG4UXCBCSUVPWUTLNFH`
+- **Source**: `contracts/compliance-limits`
+- **Purpose**: User tier management and spending limits
 
 ### 🎉 All Contracts Deployed!
 
