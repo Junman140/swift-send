@@ -2,6 +2,8 @@
 members = [
     "remittance-escrow",
     "wallet-registry",
-    "compliance-limits"
+    "compliance-limits",
+    "simple-counter",
+    "access-guard"
 ]
 resolver = "2"

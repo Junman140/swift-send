@@ -29,11 +29,32 @@ A production-ready fintech application built for global USDC transfers on the St
 - **Frontend**: React 18 + TypeScript + Vite
 - **Styling**: Tailwind CSS + shadcn/ui components
 - **Blockchain**: Stellar Network for USDC transfers
+- **Smart Contracts**: Soroban contracts on Stellar
 - **State Management**: React Context API
 - **Authentication**: Email/SMS verification system
 - **Icons**: Lucide React
 - **Notifications**: Sonner toast system
 - **Date Handling**: date-fns
+
+## 📝 Deployed Smart Contracts
+
+**Simple Counter Contract**
+- Contract ID: `CA7JEZGXWTX62LE6HSW7C6DQHDFNEKEFYI2AYNXU67AJPKIKNRINTCHB`
+- WASM Hash: `f27c656e8f36e19f7b7a5eae07ca1970e992239748103020e7441b8a3721a7e3`
+- [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CA7JEZGXWTX62LE6HSW7C6DQHDFNEKEFYI2AYNXU67AJPKIKNRINTCHB)
+- Deployed: 2026-01-02 06:57:25 UTC
+
+**Access Guard Contract**
+- Contract ID: `CDPOR7XAJDYSPCQMLM5AJESL4IOC7L2J34GW5UKSTC6NX7Z4GG53OLEF`
+- WASM Hash: `856f52a845878338f373779b5b94f85c6f7b263f994102e9679a00ee080722de`
+- [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDPOR7XAJDYSPCQMLM5AJESL4IOC7L2J34GW5UKSTC6NX7Z4GG53OLEF)
+- Deployed: 2026-01-02 07:01:41 UTC
+
+**Remittance Escrow Contract** (Ready for deployment)
+- Source: [contracts/remittance-escrow](contracts/remittance-escrow)
+- Handles transfer intents, state transitions, and event emissions
+
+**Contract Creator**: `GABUKS5YQ62VV5FWSYDGGAH32U3GZLXQK6BVFK4CDZJPEEWZTMJTJ75Z`
 
 ## 🏃‍♂️ Quick Start
 

@@ -25,6 +25,13 @@ export interface AppConfig {
     assetIssuer: string;
     simulateSubmission: boolean;
   };
+  contracts: {
+    simpleCounter: string;
+    accessGuard: string;
+    remittanceEscrow?: string;
+    walletRegistry?: string;
+    complianceLimits?: string;
+  };
   persistence: {
     databaseUrl: string;
   };
@@ -88,6 +95,13 @@ export const config: AppConfig = {
   features: {
     enableEscrow: boolFromEnv(process.env.FEATURE_ESCROW, true),
     enableRiskScoring: boolFromEnv(process.env.FEATURE_RISK_SCORING, true),
+  },
+  contracts: {
+    simpleCounter: process.env.CONTRACT_SIMPLE_COUNTER || 'CA7JEZGXWTX62LE6HSW7C6DQHDFNEKEFYI2AYNXU67AJPKIKNRINTCHB',
+    accessGuard: process.env.CONTRACT_ACCESS_GUARD || 'CDPOR7XAJDYSPCQMLM5AJESL4IOC7L2J34GW5UKSTC6NX7Z4GG53OLEF',
+    remittanceEscrow: process.env.CONTRACT_REMITTANCE_ESCROW,
+    walletRegistry: process.env.CONTRACT_WALLET_REGISTRY,
+    complianceLimits: process.env.CONTRACT_COMPLIANCE_LIMITS,
   },
 };
 
