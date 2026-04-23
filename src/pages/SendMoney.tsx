@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,13 +12,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { useCompliance } from '@/contexts/ComplianceContext';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { createTransfer } from '@/lib/transfers';
+import { createTransfer, checkTransferQueueStatus } from '@/lib/transfers';
 import { contacts, calculateFees } from '@/data/mockData';
 import { Contact, TransactionPreview } from '@/types';
 import { ArrowLeft, ArrowRight, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Wallet, MapPin, AlertTriangle, CloudOff } from 'lucide-react';
 import { toast } from 'sonner';
 
-type Step = 'recipient' | 'amount' | 'confirm' | 'success';
+type Step = 'recipient' | 'amount' | 'confirm' | 'success' | 'processing';
 
 interface NewRecipient {
   identifier: string; // email or phone
@@ -51,6 +51,53 @@ export default function SendMoney() {
   const [transactionPreview, setTransactionPreview] = useState<TransactionPreview | null>(null);
   const [useExternalWallet, setUseExternalWallet] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [queueJobId, setQueueJobId] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Poll queue status until transfer completes
+  useEffect(() => {
+    if (!queueJobId) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const pollStatus = async () => {
+      try {
+        const status = await checkTransferQueueStatus(queueJobId);
+        if (status.status === 'completed') {
+          setStep('success');
+          setQueueJobId(null);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          toast.success('Transfer completed successfully!');
+        } else if (status.status === 'failed') {
+          setSubmissionError(status.error || 'Transfer failed in the queue');
+          setQueueJobId(null);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          toast.error(status.error || 'Transfer processing failed');
+        }
+      } catch (err: unknown) {
+        // Continue polling on error
+        console.error('Failed to check queue status:', err);
+      }
+    };
+
+    pollIntervalRef.current = setInterval(pollStatus, 1000);
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [queueJobId]);
 
   const filteredContacts = useMemo(
     () =>
@@ -250,12 +297,12 @@ export default function SendMoney() {
       transactionSigningSecret
     );
 
-    if (typeof transfer.available_balance === 'number') {
-      updateBalance(transfer.available_balance);
-    }
+    // Queue response includes queue_job_id; start polling
+    setQueueJobId(transfer.queue_job_id);
+    setStep('processing');
 
     return transfer;
-  }, [amountValue, fees.networkFee, fees.serviceFee, newRecipient, selectedContact, transactionSigningSecret, updateBalance, user]);
+  }, [amountValue, fees.networkFee, fees.serviceFee, newRecipient, selectedContact, transactionSigningSecret, user]);
 
   const handleBack = useCallback(() => {
     if (step === 'amount') {
@@ -264,8 +311,32 @@ export default function SendMoney() {
       setNewRecipient(null);
     }
     else if (step === 'confirm') setStep('amount');
+    else if (step === 'processing') {
+      // Don't allow going back during processing
+      return;
+    }
     else navigate('/dashboard');
   }, [navigate, step]);
+
+  if (step === 'processing') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <div className="w-20 h-20 mx-auto rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-6 animate-pulse">
+            <Zap className="w-10 h-10 text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Processing Transfer</h1>
+          <p className="text-muted-foreground mb-4">Your transfer is being processed and verified on the Stellar network.</p>
+          <div className="space-y-2 mb-6">
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse" style={{width: '60%'}} />
+            </div>
+            <p className="text-xs text-muted-foreground">This typically takes 5-30 seconds</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'success') {
     return (

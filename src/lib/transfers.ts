@@ -25,6 +25,21 @@ export interface TransferCreateResponse {
   available_balance?: number | null;
 }
 
+export interface QueuedTransferResponse {
+  queue_job_id: string;
+  transfer_initiated: boolean;
+  status_url: string;
+}
+
+export interface QueueJobStatus {
+  queue_job_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error?: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
 function sortValue(value: JsonLike): JsonLike {
   if (Array.isArray(value)) {
     return value.map((item) => sortValue(item));
@@ -64,7 +79,7 @@ async function signPayload(payload: string, secret: string): Promise<string> {
     .join('');
 }
 
-export async function createTransfer(payload: TransferCreatePayload, transactionSigningSecret: string): Promise<TransferCreateResponse> {
+export async function createTransfer(payload: TransferCreatePayload, transactionSigningSecret: string): Promise<QueuedTransferResponse> {
   const signature = await signPayload(canonicalizeTransferPayload(payload), transactionSigningSecret);
   const response = await apiFetch('/transfers', {
     method: 'POST',
@@ -76,5 +91,15 @@ export async function createTransfer(payload: TransferCreatePayload, transaction
     throw new Error(body.error || 'Transfer failed');
   }
 
-  return body as TransferCreateResponse;
+  return body as QueuedTransferResponse;
+}
+
+export async function checkTransferQueueStatus(jobId: string): Promise<QueueJobStatus> {
+  const response = await apiFetch(`/transfers/${jobId}/status`);
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  if (!response.ok) {
+    throw new Error(body.error || 'Failed to check transfer status');
+  }
+
+  return body as QueueJobStatus;
 }

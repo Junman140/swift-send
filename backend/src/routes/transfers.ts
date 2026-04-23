@@ -34,14 +34,34 @@ export default async function transferRoutes(fastify: FastifyInstance) {
       verifySignedTransferPayload(payload, body.signature, session.transactionSigningSecret);
 
       const command = mapRequestToCommand(body);
-      const transfer = await fastify.container.services.transfers.createTransfer(command);
-      return reply.status(201).send(formatTransferResponse(transfer));
+      const jobId = fastify.container.services.transferQueue.enqueue(command);
+      return reply.status(202).send({
+        queue_job_id: jobId,
+        transfer_initiated: true,
+        status_url: `/transfers/${jobId}/status`,
+      });
     } catch (err: unknown) {
       const statusCode = err instanceof ValidationError ? err.statusCode : 400;
       const errorMessage = err instanceof Error ? err.message : 'transfer creation failed';
       const details = err instanceof ValidationError ? err.details : undefined;
       return reply.status(statusCode).send({ error: errorMessage, details });
     }
+  });
+
+  fastify.get('/transfers/:id/status', { preHandler: [requireVerifiedSession] }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const job = fastify.container.services.transferQueue.getJobStatus(id);
+    if (!job) {
+      return reply.status(404).send({ error: 'job not found' });
+    }
+    return {
+      queue_job_id: job.id,
+      status: job.status,
+      error: job.error,
+      created_at: job.createdAt,
+      started_at: job.startedAt,
+      completed_at: job.completedAt,
+    };
   });
 
   fastify.get('/transfers/:id', { preHandler: [requireVerifiedSession] }, async (req, reply) => {
