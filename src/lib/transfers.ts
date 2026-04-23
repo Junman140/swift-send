@@ -19,6 +19,12 @@ export interface TransferCreatePayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface TransferCreateResponse {
+  id: string;
+  status: string;
+  available_balance?: number | null;
+}
+
 function sortValue(value: JsonLike): JsonLike {
   if (Array.isArray(value)) {
     return value.map((item) => sortValue(item));
@@ -58,7 +64,7 @@ async function signPayload(payload: string, secret: string): Promise<string> {
     .join('');
 }
 
-export async function createTransfer(payload: TransferCreatePayload, transactionSigningSecret: string) {
+export async function createTransfer(payload: TransferCreatePayload, transactionSigningSecret: string): Promise<TransferCreateResponse> {
   const signature = await signPayload(canonicalizeTransferPayload(payload), transactionSigningSecret);
   const response = await apiFetch('/transfers', {
     method: 'POST',
@@ -70,5 +76,5 @@ export async function createTransfer(payload: TransferCreatePayload, transaction
     throw new Error(body.error || 'Transfer failed');
   }
 
-  return body;
+  return body as TransferCreateResponse;
 }

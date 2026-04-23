@@ -34,7 +34,7 @@ const PHONE_REGEX = /^\+?[1-9]\d{8,14}$/;
 
 export default function SendMoney() {
   const navigate = useNavigate();
-  const { user, transactionSigningSecret } = useAuth();
+  const { user, transactionSigningSecret, updateBalance } = useAuth();
   const { connectionState } = useWallet();
   const { checkTransactionCompliance } = useCompliance();
   const [step, setStep] = useState<Step>('recipient');
@@ -47,6 +47,7 @@ export default function SendMoney() {
   const [showWalletSigning, setShowWalletSigning] = useState(false);
   const [transactionPreview, setTransactionPreview] = useState<TransactionPreview | null>(null);
   const [useExternalWallet, setUseExternalWallet] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const filteredContacts = useMemo(
     () =>
@@ -96,6 +97,7 @@ export default function SendMoney() {
   const handleSelectContact = useCallback((contact: Contact) => {
     setSelectedContact(contact);
     setNewRecipient(null);
+    setSubmissionError(null);
     setStep('amount');
   }, []);
 
@@ -112,18 +114,27 @@ export default function SendMoney() {
       name: recipientInput.trim().split('@')[0] // Use email prefix or phone as name
     });
     setSelectedContact(null);
+    setSubmissionError(null);
     setStep('amount');
   }, [recipientInput]);
 
   const handleAmountSubmit = useCallback(() => {
     if (amountError) {
+      setSubmissionError(amountError);
       toast.error(amountError);
       return;
     }
+    setSubmissionError(null);
     setStep('confirm');
   }, [amountError]);
 
   const handleConfirmSend = async () => {
+    if (amountError) {
+      setSubmissionError(amountError);
+      toast.error(amountError);
+      return;
+    }
+
     // Check if user wants to use external wallet
     if (connectionState.isConnected && useExternalWallet) {
       // Prepare transaction for external wallet signing
@@ -142,13 +153,16 @@ export default function SendMoney() {
 
     // Standard managed wallet transaction
     setIsProcessing(true);
+    setSubmissionError(null);
 
     try {
       await submitTransfer();
       setStep('success');
       toast.success('Transfer submitted successfully');
     } catch (error: unknown) {
-      toast.error(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setSubmissionError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -157,6 +171,7 @@ export default function SendMoney() {
   const handleWalletTransactionSuccess = async (txHash: string) => {
     setShowWalletSigning(false);
     setIsProcessing(true);
+    setSubmissionError(null);
 
     try {
       await submitTransfer({ externalWalletTxHash: txHash });
@@ -169,7 +184,9 @@ export default function SendMoney() {
         }
       });
     } catch (error: unknown) {
-      toast.error(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setSubmissionError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -178,6 +195,7 @@ export default function SendMoney() {
   const handleWalletTransactionError = (error: string) => {
     setShowWalletSigning(false);
     setIsProcessing(false);
+    setSubmissionError(error);
     toast.error('Transaction failed', {
       description: error
     });
@@ -194,7 +212,7 @@ export default function SendMoney() {
     const recipientName = selectedContact?.name || newRecipient?.name || 'Recipient';
     const recipientIdentifier = selectedContact?.phone || newRecipient?.identifier || '';
 
-    await createTransfer(
+    const transfer = await createTransfer(
       {
         idempotency_key: `transfer_${Date.now()}`,
         from_wallet_id: user.walletAddress || user.id,
@@ -220,7 +238,13 @@ export default function SendMoney() {
       },
       transactionSigningSecret
     );
-  }, [amountValue, fees.networkFee, fees.serviceFee, newRecipient, selectedContact, transactionSigningSecret, user]);
+
+    if (typeof transfer.available_balance === 'number') {
+      updateBalance(transfer.available_balance);
+    }
+
+    return transfer;
+  }, [amountValue, fees.networkFee, fees.serviceFee, newRecipient, selectedContact, transactionSigningSecret, updateBalance, user]);
 
   const handleBack = useCallback(() => {
     if (step === 'amount') {
@@ -467,6 +491,7 @@ export default function SendMoney() {
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
+                    onInput={() => setSubmissionError(null)}
                     placeholder="0.00"
                     className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground bg-transparent border-none outline-none w-40 sm:w-56 md:w-64 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     autoFocus
@@ -486,6 +511,9 @@ export default function SendMoney() {
                 </div>
                 {amountError && amount.trim() && (
                   <p className="mt-2 text-sm text-destructive">{amountError}</p>
+                )}
+                {submissionError && !amountError && (
+                  <p className="mt-2 text-sm text-destructive">{submissionError}</p>
                 )}
 
                 {/* Compliance Check for Amount */}
@@ -701,6 +729,12 @@ export default function SendMoney() {
                 recipientGets={fees.recipientGets}
               />
 
+              {submissionError && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {submissionError}
+                </div>
+              )}
+
               {/* Speed & Security Assurance */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800 text-center">
@@ -792,7 +826,7 @@ export default function SendMoney() {
                   size="lg"
                   className="w-full"
                   onClick={handleConfirmSend}
-                  disabled={isProcessing}
+                  disabled={isProcessing || Boolean(amountError)}
                 >
                   {isProcessing ? (
                     <div className="flex items-center gap-2">

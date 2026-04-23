@@ -43,6 +43,24 @@ export function getSession(id: string): Session | undefined {
   return sessions.get(id);
 }
 
+export function getSessionUserBalance(id: string): number | null {
+  const session = sessions.get(id);
+  return session?.user ? session.user.usdcBalance : null;
+}
+
+export function adjustSessionUserBalance(id: string, delta: number): number | null {
+  const session = sessions.get(id);
+  if (!session?.user) {
+    return null;
+  }
+
+  const nextBalance = Number((session.user.usdcBalance + delta).toFixed(2));
+  session.user.usdcBalance = nextBalance;
+  session.user.balance = nextBalance;
+  saveSession(session);
+  return nextBalance;
+}
+
 export function saveSession(session: Session): void {
   sessions.set(session.id, session);
 }

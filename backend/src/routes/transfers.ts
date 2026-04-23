@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { ValidationError } from '../errors';
-import { getSession } from '../auth/sessionStore';
+import { getSession, getSessionUserBalance } from '../auth/sessionStore';
 import type { JwtSessionPayload, Session } from '../auth/sessionTypes';
 import { CreateTransferCommand, TransferRecord } from '../modules/transfers/domain';
 import { canonicalizeSignedTransferPayload, verifySignedTransferPayload } from '../modules/transfers/requestSigning';
@@ -133,6 +133,7 @@ function formatTransferResponse(record: TransferRecord) {
     },
     history: record.statusHistory,
     last_error: record.lastError,
+    available_balance: getSessionUserBalance(record.userId),
     created_at: record.createdAt,
     updated_at: record.updatedAt,
     signature_payload: canonicalizeSignedTransferPayload({
