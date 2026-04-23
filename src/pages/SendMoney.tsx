@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,24 +6,26 @@ import { ContactItem } from '@/components/ContactItem';
 import { FeeBreakdown } from '@/components/FeeBreakdown';
 import { BottomNav } from '@/components/BottomNav';
 import TransactionSigningDialog from '@/components/TransactionSigning';
-import { WalletStatusIndicator } from '@/components/WalletConnection';
 import { CompliancePreCheck } from '@/components/ComplianceCheck';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { useCompliance } from '@/contexts/ComplianceContext';
 import { contacts, calculateFees } from '@/data/mockData';
 import { Contact, TransactionPreview } from '@/types';
-import { ArrowLeft, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Clock, Wallet, MapPin, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Wallet, MapPin, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Step = 'recipient' | 'amount' | 'confirm' | 'success';
-type RecipientType = 'contact' | 'new';
 
 interface NewRecipient {
   identifier: string; // email or phone
   name?: string;
   type: 'email' | 'phone';
 }
+
+const MAX_TRANSFER_AMOUNT = 5000;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^\+?[1-9]\d{8,14}$/;
 
 export default function SendMoney() {
   const navigate = useNavigate();
@@ -33,7 +35,6 @@ export default function SendMoney() {
   const [step, setStep] = useState<Step>('recipient');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [newRecipient, setNewRecipient] = useState<NewRecipient | null>(null);
-  const [recipientType, setRecipientType] = useState<RecipientType>('contact');
   const [recipientInput, setRecipientInput] = useState('');
   const [amount, setAmount] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,36 +43,58 @@ export default function SendMoney() {
   const [transactionPreview, setTransactionPreview] = useState<TransactionPreview | null>(null);
   const [useExternalWallet, setUseExternalWallet] = useState(false);
 
-  const filteredContacts = contacts.filter(
-    (contact) =>
-      contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contact.phone.includes(searchQuery)
+  const filteredContacts = useMemo(
+    () =>
+      contacts.filter(
+        (contact) =>
+          contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          contact.phone.includes(searchQuery)
+      ),
+    [searchQuery]
   );
 
   // Detect if input is email or phone
   const detectRecipientType = (input: string): 'email' | 'phone' | null => {
-    if (input.includes('@') && input.includes('.')) return 'email';
-    if (/^[\+]?[(]?[\d\s\-\(\)]{10,}/.test(input)) return 'phone';
+    const sanitized = input.trim();
+    if (EMAIL_REGEX.test(sanitized)) return 'email';
+    if (PHONE_REGEX.test(sanitized.replace(/[\s()-]/g, ''))) return 'phone';
     return null;
   };
 
+  const recipientInputType = useMemo(() => detectRecipientType(recipientInput), [recipientInput]);
+
   const isValidRecipientInput = useMemo(() => {
-    return detectRecipientType(recipientInput) !== null;
-  }, [recipientInput]);
+    return recipientInputType !== null;
+  }, [recipientInputType]);
+
+  const amountValue = useMemo(() => Number.parseFloat(amount) || 0, [amount]);
 
   const fees = useMemo(() => {
-    const parsedAmount = parseFloat(amount) || 0;
-    return calculateFees(parsedAmount);
-  }, [amount]);
+    return calculateFees(amountValue);
+  }, [amountValue]);
 
-  const handleSelectContact = (contact: Contact) => {
+  const amountError = useMemo(() => {
+    if (!amount.trim()) return 'Amount is required';
+    if (Number.isNaN(amountValue) || amountValue <= 0) return 'Enter a valid amount greater than zero';
+    if (amountValue < 1) return 'Minimum transfer amount is $1.00';
+    if (amountValue > MAX_TRANSFER_AMOUNT) return `Maximum transfer amount is $${MAX_TRANSFER_AMOUNT.toLocaleString()}`;
+    if (amountValue > (user?.usdcBalance || 0)) return 'Insufficient balance';
+    return null;
+  }, [amount, amountValue, user?.usdcBalance]);
+
+  const recipientError = useMemo(() => {
+    if (!recipientInput.trim()) return 'Recipient email or phone is required';
+    if (!isValidRecipientInput) return 'Enter a valid email or international phone number';
+    return null;
+  }, [isValidRecipientInput, recipientInput]);
+
+  const handleSelectContact = useCallback((contact: Contact) => {
     setSelectedContact(contact);
     setNewRecipient(null);
-    setRecipientType('contact');
     setStep('amount');
-  };
+  }, []);
 
-  const handleSelectNewRecipient = () => {
+  const handleSelectNewRecipient = useCallback(() => {
     const type = detectRecipientType(recipientInput);
     if (!type) {
       toast.error('Please enter a valid email or phone number');
@@ -79,27 +102,21 @@ export default function SendMoney() {
     }
     
     setNewRecipient({
-      identifier: recipientInput,
+      identifier: recipientInput.trim(),
       type,
-      name: recipientInput.split('@')[0] // Use email prefix or phone as name
+      name: recipientInput.trim().split('@')[0] // Use email prefix or phone as name
     });
     setSelectedContact(null);
-    setRecipientType('new');
     setStep('amount');
-  };
+  }, [recipientInput]);
 
-  const handleAmountSubmit = () => {
-    const parsedAmount = parseFloat(amount);
-    if (!parsedAmount || parsedAmount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-    if (parsedAmount > (user?.usdcBalance || 0)) {
-      toast.error('Insufficient balance');
+  const handleAmountSubmit = useCallback(() => {
+    if (amountError) {
+      toast.error(amountError);
       return;
     }
     setStep('confirm');
-  };
+  }, [amountError]);
 
   const handleConfirmSend = async () => {
     // Check if user wants to use external wallet
@@ -124,8 +141,7 @@ export default function SendMoney() {
     // Simulate blockchain transaction
     await new Promise((resolve) => setTimeout(resolve, 2000));
     
-    const parsedAmount = parseFloat(amount);
-    updateBalance((user?.usdcBalance || 0) - parsedAmount);
+    updateBalance((user?.usdcBalance || 0) - amountValue);
     
     setIsProcessing(false);
     setStep('success');
@@ -155,7 +171,7 @@ export default function SendMoney() {
     });
   };
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (step === 'amount') {
       setStep('recipient');
       setSelectedContact(null);
@@ -163,7 +179,7 @@ export default function SendMoney() {
     }
     else if (step === 'confirm') setStep('amount');
     else navigate('/dashboard');
-  };
+  }, [navigate, step]);
 
   if (step === 'success') {
     return (
@@ -236,10 +252,10 @@ export default function SendMoney() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-24 overflow-x-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-4">
-        <div className="max-w-lg mx-auto flex items-center gap-4">
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-4">
+        <div className="max-w-lg mx-auto flex items-center gap-3 sm:gap-4">
           <button
             onClick={handleBack}
             className="p-2 rounded-lg hover:bg-secondary transition-colors"
@@ -254,7 +270,7 @@ export default function SendMoney() {
         </div>
       </header>
 
-      <main className="px-6 py-6">
+      <main className="px-4 sm:px-6 py-6">
         <div className="max-w-lg mx-auto">
           {/* Step 1: Select Recipient */}
           {step === 'recipient' && (
@@ -266,12 +282,12 @@ export default function SendMoney() {
                   <span className="font-medium text-foreground">Send to anyone</span>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <div className="relative flex-1">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                      {detectRecipientType(recipientInput) === 'email' ? (
+                      {recipientInputType === 'email' ? (
                         <Mail className="w-5 h-5 text-muted-foreground" />
-                      ) : detectRecipientType(recipientInput) === 'phone' ? (
+                      ) : recipientInputType === 'phone' ? (
                         <Phone className="w-5 h-5 text-muted-foreground" />
                       ) : (
                         <UserPlus className="w-5 h-5 text-muted-foreground" />
@@ -289,18 +305,21 @@ export default function SendMoney() {
                     onClick={handleSelectNewRecipient}
                     disabled={!isValidRecipientInput}
                     variant={isValidRecipientInput ? "default" : "secondary"}
-                    className="px-6"
+                    className="w-full sm:w-auto px-6 min-h-11"
                   >
                     Send
                   </Button>
                 </div>
                 
                 <p className="text-xs text-muted-foreground mt-2">
-                  {detectRecipientType(recipientInput) === 'email' && '📧 We will send a secure link to their email'}
-                  {detectRecipientType(recipientInput) === 'phone' && '📱 We will send a secure SMS to their phone'}
-                  {!detectRecipientType(recipientInput) && recipientInput && '⚠️ Please enter a valid email or phone number'}
+                  {recipientInputType === 'email' && '📧 We will send a secure link to their email'}
+                  {recipientInputType === 'phone' && '📱 We will send a secure SMS to their phone'}
+                  {!recipientInputType && recipientInput && '⚠️ Please enter a valid email or phone number'}
                   {!recipientInput && 'Enter an email address or phone number to send money instantly'}
                 </p>
+                {recipientError && recipientInput && (
+                  <p className="text-xs text-destructive mt-1">{recipientError}</p>
+                )}
               </div>
 
               {/* Divider */}
@@ -398,28 +417,31 @@ export default function SendMoney() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    className="text-6xl font-bold text-foreground bg-transparent border-none outline-none w-64 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground bg-transparent border-none outline-none w-40 sm:w-56 md:w-64 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     autoFocus
                   />
-                  <span className="text-2xl font-semibold text-muted-foreground">USDC</span>
+                  <span className="text-xl sm:text-2xl font-semibold text-muted-foreground">USDC</span>
                 </div>
                 
-                <div className="flex items-center justify-center gap-4 text-sm">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-sm">
                   <p className="text-muted-foreground">
                     Available: ${user?.usdcBalance?.toFixed(2)} USDC
                   </p>
-                  {parseFloat(amount) > (user?.usdcBalance || 0) && (
+                  {amountValue > (user?.usdcBalance || 0) && (
                     <p className="text-destructive font-medium">
                       ⚠️ Insufficient balance
                     </p>
                   )}
                 </div>
+                {amountError && amount.trim() && (
+                  <p className="mt-2 text-sm text-destructive">{amountError}</p>
+                )}
 
                 {/* Compliance Check for Amount */}
-                {amount && parseFloat(amount) > 0 && (
+                {amount && amountValue > 0 && (
                   (() => {
                     const complianceCheck = checkTransactionCompliance(
-                      parseFloat(amount), 
+                      amountValue, 
                       selectedContact?.countryCode || 'US'
                     );
                     
@@ -474,10 +496,10 @@ export default function SendMoney() {
               </div>
 
               {/* Real-time Fee Breakdown */}
-              {parseFloat(amount) > 0 && (
+              {amountValue > 0 && (
                 <div className="space-y-4">
                   <FeeBreakdown
-                    amount={parseFloat(amount)}
+                    amount={amountValue}
                     networkFee={fees.networkFee}
                     serviceFee={fees.serviceFee}
                     totalFee={fees.totalFee}
@@ -485,9 +507,9 @@ export default function SendMoney() {
                   />
                   
                   {/* Compliance Check Display */}
-                  {parseFloat(amount) > 0 && (() => {
+                  {amountValue > 0 && (() => {
                     const recipientCountry = selectedContact?.countryCode || newRecipient?.name || 'US';
-                    const complianceCheck = checkTransactionCompliance(parseFloat(amount), recipientCountry);
+                    const complianceCheck = checkTransactionCompliance(amountValue, recipientCountry);
                     
                     if (complianceCheck.warnings.length > 0 || !complianceCheck.canProceed) {
                       return (
@@ -535,12 +557,14 @@ export default function SendMoney() {
                 size="lg"
                 className="w-full"
                 onClick={handleAmountSubmit}
-                disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > (user?.usdcBalance || 0)}
+                disabled={Boolean(amountError)}
               >
-                {!amount || parseFloat(amount) <= 0 ? (
+                {!amount || amountValue <= 0 ? (
                   'Enter amount to continue'
-                ) : parseFloat(amount) > (user?.usdcBalance || 0) ? (
+                ) : amountValue > (user?.usdcBalance || 0) ? (
                   'Insufficient balance'
+                ) : amountValue > MAX_TRANSFER_AMOUNT ? (
+                  `Max $${MAX_TRANSFER_AMOUNT.toLocaleString()} allowed`
                 ) : (
                   <>
                     Review Transfer
@@ -575,7 +599,7 @@ export default function SendMoney() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">You're sending</span>
-                    <span className="text-2xl font-bold text-foreground">${parseFloat(amount).toFixed(2)} USDC</span>
+                    <span className="text-2xl font-bold text-foreground">${amountValue.toFixed(2)} USDC</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -709,7 +733,7 @@ export default function SendMoney() {
 
               {/* Final CTA */}
               <CompliancePreCheck
-                amount={parseFloat(amount)}
+                amount={amountValue}
                 destination={selectedContact?.countryCode || newRecipient?.name || 'US'}
               >
                 <Button
@@ -727,7 +751,7 @@ export default function SendMoney() {
                   ) : (
                     <>
                       <Send className="w-5 h-5" />
-                      Send ${parseFloat(amount).toFixed(2)}
+                      Send ${amountValue.toFixed(2)}
                     </>
                   )}
                 </Button>
