@@ -1,24 +1,24 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ContactItem } from '@/components/ContactItem';
 import { FeeBreakdown } from '@/components/FeeBreakdown';
 import { BottomNav } from '@/components/BottomNav';
+import { NetworkStatusIndicator } from '@/components/NetworkStatusIndicator';
 import TransactionSigningDialog from '@/components/TransactionSigning';
-import { WalletStatusIndicator } from '@/components/WalletConnection';
 import { CompliancePreCheck } from '@/components/ComplianceCheck';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { useCompliance } from '@/contexts/ComplianceContext';
-import { contacts } from '@/data/mockData';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { createTransfer, checkTransferQueueStatus } from '@/lib/transfers';
+import { contacts, calculateFees } from '@/data/mockData';
 import { Contact, TransactionPreview } from '@/types';
-import { calculateSendFees } from '@/lib/fees';
-import { ArrowLeft, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Clock, Wallet, MapPin, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, DollarSign, Send, CheckCircle2, UserPlus, Mail, Phone, MessageCircle, Shield, Zap, Globe2, Star, Wallet, MapPin, AlertTriangle, CloudOff } from 'lucide-react';
 import { toast } from 'sonner';
 
-type Step = 'recipient' | 'amount' | 'confirm' | 'success';
-type RecipientType = 'contact' | 'new';
+type Step = 'recipient' | 'amount' | 'confirm' | 'success' | 'processing';
 
 interface NewRecipient {
   identifier: string; // email or phone
@@ -26,15 +26,23 @@ interface NewRecipient {
   type: 'email' | 'phone';
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Transfer failed';
+}
+
+const MAX_TRANSFER_AMOUNT = 5000;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^\+?[1-9]\d{8,14}$/;
+
 export default function SendMoney() {
   const navigate = useNavigate();
-  const { user, updateBalance } = useAuth();
+  const { user, transactionSigningSecret, updateBalance } = useAuth();
   const { connectionState } = useWallet();
   const { checkTransactionCompliance } = useCompliance();
+  const network = useNetworkStatus();
   const [step, setStep] = useState<Step>('recipient');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [newRecipient, setNewRecipient] = useState<NewRecipient | null>(null);
-  const [recipientType, setRecipientType] = useState<RecipientType>('contact');
   const [recipientInput, setRecipientInput] = useState('');
   const [amount, setAmount] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,37 +50,110 @@ export default function SendMoney() {
   const [showWalletSigning, setShowWalletSigning] = useState(false);
   const [transactionPreview, setTransactionPreview] = useState<TransactionPreview | null>(null);
   const [useExternalWallet, setUseExternalWallet] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [queueJobId, setQueueJobId] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const filteredContacts = contacts.filter(
-    (contact) =>
-      contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contact.phone.includes(searchQuery)
+  // Poll queue status until transfer completes
+  useEffect(() => {
+    if (!queueJobId) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const pollStatus = async () => {
+      try {
+        const status = await checkTransferQueueStatus(queueJobId);
+        if (status.status === 'completed') {
+          setStep('success');
+          setQueueJobId(null);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          toast.success('Transfer completed successfully!');
+        } else if (status.status === 'failed') {
+          setSubmissionError(status.error || 'Transfer failed in the queue');
+          setQueueJobId(null);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          toast.error(status.error || 'Transfer processing failed');
+        }
+      } catch (err: unknown) {
+        // Continue polling on error
+        console.error('Failed to check queue status:', err);
+      }
+    };
+
+    pollIntervalRef.current = setInterval(pollStatus, 1000);
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [queueJobId]);
+
+  const filteredContacts = useMemo(
+    () =>
+      contacts.filter(
+        (contact) =>
+          contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          contact.phone.includes(searchQuery)
+      ),
+    [searchQuery]
   );
 
   // Detect if input is email or phone
   const detectRecipientType = (input: string): 'email' | 'phone' | null => {
-    if (input.includes('@') && input.includes('.')) return 'email';
-    if (/^[\+]?[(]?[\d\s\-\(\)]{10,}/.test(input)) return 'phone';
+    const sanitized = input.trim();
+    if (EMAIL_REGEX.test(sanitized)) return 'email';
+    if (PHONE_REGEX.test(sanitized.replace(/[\s()-]/g, ''))) return 'phone';
     return null;
   };
 
+  const recipientInputType = useMemo(() => detectRecipientType(recipientInput), [recipientInput]);
+
   const isValidRecipientInput = useMemo(() => {
-    return detectRecipientType(recipientInput) !== null;
-  }, [recipientInput]);
+    return recipientInputType !== null;
+  }, [recipientInputType]);
+
+  const amountValue = useMemo(() => Number.parseFloat(amount) || 0, [amount]);
 
   const fees = useMemo(() => {
-    const parsedAmount = parseFloat(amount) || 0;
-    return calculateSendFees(parsedAmount);
-  }, [amount]);
+    return calculateFees(amountValue);
+  }, [amountValue]);
 
-  const handleSelectContact = (contact: Contact) => {
+  const amountError = useMemo(() => {
+    if (!amount.trim()) return 'Amount is required';
+    if (Number.isNaN(amountValue) || amountValue <= 0) return 'Enter a valid amount greater than zero';
+    if (amountValue < 1) return 'Minimum transfer amount is $1.00';
+    if (amountValue > MAX_TRANSFER_AMOUNT) return `Maximum transfer amount is $${MAX_TRANSFER_AMOUNT.toLocaleString()}`;
+    if (amountValue > (user?.usdcBalance || 0)) return 'Insufficient balance';
+    return null;
+  }, [amount, amountValue, user?.usdcBalance]);
+  const isNetworkOffline = network.status === 'offline';
+  const networkBlockingMessage = isNetworkOffline ? 'Stellar is offline. Transfers are temporarily unavailable.' : null;
+
+  const recipientError = useMemo(() => {
+    if (!recipientInput.trim()) return 'Recipient email or phone is required';
+    if (!isValidRecipientInput) return 'Enter a valid email or international phone number';
+    return null;
+  }, [isValidRecipientInput, recipientInput]);
+
+  const handleSelectContact = useCallback((contact: Contact) => {
     setSelectedContact(contact);
     setNewRecipient(null);
-    setRecipientType('contact');
+    setSubmissionError(null);
     setStep('amount');
-  };
+  }, []);
 
-  const handleSelectNewRecipient = () => {
+  const handleSelectNewRecipient = useCallback(() => {
     const type = detectRecipientType(recipientInput);
     if (!type) {
       toast.error('Please enter a valid email or phone number');
@@ -80,29 +161,38 @@ export default function SendMoney() {
     }
     
     setNewRecipient({
-      identifier: recipientInput,
+      identifier: recipientInput.trim(),
       type,
-      name: recipientInput.split('@')[0] // Use email prefix or phone as name
+      name: recipientInput.trim().split('@')[0] // Use email prefix or phone as name
     });
     setSelectedContact(null);
-    setRecipientType('new');
+    setSubmissionError(null);
     setStep('amount');
-  };
+  }, [recipientInput]);
 
-  const handleAmountSubmit = () => {
-    const parsedAmount = parseFloat(amount);
-    if (!parsedAmount || parsedAmount <= 0) {
-      toast.error('Please enter a valid amount');
+  const handleAmountSubmit = useCallback(() => {
+    if (amountError) {
+      setSubmissionError(amountError);
+      toast.error(amountError);
       return;
     }
-    if (parsedAmount > (user?.usdcBalance || 0)) {
-      toast.error('Insufficient balance');
-      return;
-    }
+    setSubmissionError(null);
     setStep('confirm');
-  };
+  }, [amountError]);
 
   const handleConfirmSend = async () => {
+    if (isNetworkOffline) {
+      setSubmissionError(networkBlockingMessage);
+      toast.error(networkBlockingMessage);
+      return;
+    }
+
+    if (amountError) {
+      setSubmissionError(amountError);
+      toast.error(amountError);
+      return;
+    }
+
     // Check if user wants to use external wallet
     if (connectionState.isConnected && useExternalWallet) {
       // Prepare transaction for external wallet signing
@@ -121,50 +211,132 @@ export default function SendMoney() {
 
     // Standard managed wallet transaction
     setIsProcessing(true);
-    
-    // Simulate blockchain transaction
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    const parsedAmount = parseFloat(amount);
-    updateBalance((user?.usdcBalance || 0) - parsedAmount);
-    
-    setIsProcessing(false);
-    setStep('success');
-    
-    toast.success('Transfer completed successfully!');
+    setSubmissionError(null);
+
+    try {
+      await submitTransfer();
+      setStep('success');
+      toast.success('Transfer submitted successfully');
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      setSubmissionError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleWalletTransactionSuccess = (txHash: string) => {
+  const handleWalletTransactionSuccess = async (txHash: string) => {
     setShowWalletSigning(false);
-    setIsProcessing(false);
-    setStep('success');
-    
-    toast.success('Transfer completed with external wallet!', {
-      description: `Transaction hash: ${txHash.slice(0, 8)}...`,
-      action: {
-        label: 'View Explorer',
-        onClick: () => window.open(`https://stellar.expert/explorer/public/tx/${txHash}`, '_blank')
-      }
-    });
+    setIsProcessing(true);
+    setSubmissionError(null);
+
+    try {
+      await submitTransfer({ externalWalletTxHash: txHash });
+      setStep('success');
+      toast.success('Transfer completed with external wallet!', {
+        description: `Transaction hash: ${txHash.slice(0, 8)}...`,
+        action: {
+          label: 'View Explorer',
+          onClick: () => window.open(`https://stellar.expert/explorer/public/tx/${txHash}`, '_blank')
+        }
+      });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      setSubmissionError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleWalletTransactionError = (error: string) => {
     setShowWalletSigning(false);
     setIsProcessing(false);
+    setSubmissionError(error);
     toast.error('Transaction failed', {
       description: error
     });
   };
 
-  const handleBack = () => {
+  const submitTransfer = useCallback(async (extraMetadata?: Record<string, unknown>) => {
+    if (!user) {
+      throw new Error('You must be signed in to send money');
+    }
+    if (!transactionSigningSecret) {
+      throw new Error('Transaction signing is not available for this session');
+    }
+
+    const recipientName = selectedContact?.name || newRecipient?.name || 'Recipient';
+    const recipientIdentifier = selectedContact?.phone || newRecipient?.identifier || '';
+
+    const transfer = await createTransfer(
+      {
+        idempotency_key: `transfer_${Date.now()}`,
+        from_wallet_id: user.walletAddress || user.id,
+        user_id: user.id,
+        amount: amountValue,
+        currency: 'USDC',
+        recipient: {
+          type: 'cash_pickup',
+          country: selectedContact?.country || 'US',
+          metadata: {
+            identifier: recipientIdentifier,
+            name: recipientName,
+            source: newRecipient ? newRecipient.type : 'recent_contact',
+          },
+        },
+        compliance_tier: user.complianceTier,
+        metadata: {
+          initiated_from: 'send_money_page',
+          network_fee: fees.networkFee,
+          service_fee: fees.serviceFee,
+          ...(extraMetadata || {}),
+        },
+      },
+      transactionSigningSecret
+    );
+
+    // Queue response includes queue_job_id; start polling
+    setQueueJobId(transfer.queue_job_id);
+    setStep('processing');
+
+    return transfer;
+  }, [amountValue, fees.networkFee, fees.serviceFee, newRecipient, selectedContact, transactionSigningSecret, user]);
+
+  const handleBack = useCallback(() => {
     if (step === 'amount') {
       setStep('recipient');
       setSelectedContact(null);
       setNewRecipient(null);
     }
     else if (step === 'confirm') setStep('amount');
+    else if (step === 'processing') {
+      // Don't allow going back during processing
+      return;
+    }
     else navigate('/dashboard');
-  };
+  }, [navigate, step]);
+
+  if (step === 'processing') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <div className="w-20 h-20 mx-auto rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-6 animate-pulse">
+            <Zap className="w-10 h-10 text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Processing Transfer</h1>
+          <p className="text-muted-foreground mb-4">Your transfer is being processed and verified on the Stellar network.</p>
+          <div className="space-y-2 mb-6">
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse" style={{width: '60%'}} />
+            </div>
+            <p className="text-xs text-muted-foreground">This typically takes 5-30 seconds</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'success') {
     return (
@@ -237,10 +409,10 @@ export default function SendMoney() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-32 overflow-x-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-4">
-        <div className="max-w-lg mx-auto flex items-center gap-4">
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-4">
+        <div className="max-w-lg mx-auto flex items-center gap-3 sm:gap-4">
           <button
             onClick={handleBack}
             className="p-2 rounded-lg hover:bg-secondary transition-colors"
@@ -255,7 +427,7 @@ export default function SendMoney() {
         </div>
       </header>
 
-      <main className="px-6 py-6">
+      <main className="px-4 sm:px-6 py-6">
         <div className="max-w-lg mx-auto">
           {/* Step 1: Select Recipient */}
           {step === 'recipient' && (
@@ -267,12 +439,12 @@ export default function SendMoney() {
                   <span className="font-medium text-foreground">Send to anyone</span>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <div className="relative flex-1">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                      {detectRecipientType(recipientInput) === 'email' ? (
+                      {recipientInputType === 'email' ? (
                         <Mail className="w-5 h-5 text-muted-foreground" />
-                      ) : detectRecipientType(recipientInput) === 'phone' ? (
+                      ) : recipientInputType === 'phone' ? (
                         <Phone className="w-5 h-5 text-muted-foreground" />
                       ) : (
                         <UserPlus className="w-5 h-5 text-muted-foreground" />
@@ -280,6 +452,7 @@ export default function SendMoney() {
                     </div>
                     <Input
                       type="text"
+                      inputMode={recipientInputType === 'email' ? 'email' : recipientInputType === 'phone' ? 'tel' : 'text'}
                       placeholder="Email or phone number"
                       value={recipientInput}
                       onChange={(e) => setRecipientInput(e.target.value)}
@@ -290,18 +463,21 @@ export default function SendMoney() {
                     onClick={handleSelectNewRecipient}
                     disabled={!isValidRecipientInput}
                     variant={isValidRecipientInput ? "default" : "secondary"}
-                    className="px-6"
+                    className="w-full sm:w-auto px-6 min-h-11"
                   >
                     Send
                   </Button>
                 </div>
                 
                 <p className="text-xs text-muted-foreground mt-2">
-                  {detectRecipientType(recipientInput) === 'email' && '📧 We will send a secure link to their email'}
-                  {detectRecipientType(recipientInput) === 'phone' && '📱 We will send a secure SMS to their phone'}
-                  {!detectRecipientType(recipientInput) && recipientInput && '⚠️ Please enter a valid email or phone number'}
+                  {recipientInputType === 'email' && '📧 We will send a secure link to their email'}
+                  {recipientInputType === 'phone' && '📱 We will send a secure SMS to their phone'}
+                  {!recipientInputType && recipientInput && '⚠️ Please enter a valid email or phone number'}
                   {!recipientInput && 'Enter an email address or phone number to send money instantly'}
                 </p>
+                {recipientError && recipientInput && (
+                  <p className="text-xs text-destructive mt-1">{recipientError}</p>
+                )}
               </div>
 
               {/* Divider */}
@@ -354,6 +530,8 @@ export default function SendMoney() {
           {/* Step 2: Enter Amount */}
           {step === 'amount' && (selectedContact || newRecipient) && (
             <div className="space-y-6 animate-fade-in">
+              <NetworkStatusIndicator network={network} compact />
+
               {/* Recipient Display */}
               <div className="bg-card rounded-xl p-4 shadow-card">
                 <div className="flex items-center gap-4">
@@ -396,31 +574,42 @@ export default function SendMoney() {
                   <DollarSign className="w-10 h-10 text-primary" />
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
+                    onInput={() => setSubmissionError(null)}
                     placeholder="0.00"
-                    className="text-6xl font-bold text-foreground bg-transparent border-none outline-none w-64 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground bg-transparent border-none outline-none w-40 sm:w-56 md:w-64 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     autoFocus
                   />
-                  <span className="text-2xl font-semibold text-muted-foreground">USDC</span>
+                  <span className="text-xl sm:text-2xl font-semibold text-muted-foreground">USDC</span>
                 </div>
                 
-                <div className="flex items-center justify-center gap-4 text-sm">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-sm">
                   <p className="text-muted-foreground">
                     Available: ${user?.usdcBalance?.toFixed(2)} USDC
                   </p>
-                  {parseFloat(amount) > (user?.usdcBalance || 0) && (
+                  {amountValue > (user?.usdcBalance || 0) && (
                     <p className="text-destructive font-medium">
                       ⚠️ Insufficient balance
                     </p>
                   )}
                 </div>
+                {amountError && amount.trim() && (
+                  <p className="mt-2 text-sm text-destructive">{amountError}</p>
+                )}
+                {submissionError && !amountError && (
+                  <p className="mt-2 text-sm text-destructive">{submissionError}</p>
+                )}
+                {networkBlockingMessage && (
+                  <p className="mt-2 text-sm text-destructive">{networkBlockingMessage}</p>
+                )}
 
                 {/* Compliance Check for Amount */}
-                {amount && parseFloat(amount) > 0 && (
+                {amount && amountValue > 0 && (
                   (() => {
                     const complianceCheck = checkTransactionCompliance(
-                      parseFloat(amount), 
+                      amountValue, 
                       selectedContact?.countryCode || 'US'
                     );
                     
@@ -475,10 +664,10 @@ export default function SendMoney() {
               </div>
 
               {/* Real-time Fee Breakdown */}
-              {parseFloat(amount) > 0 && (
+              {amountValue > 0 && (
                 <div className="space-y-4">
                   <FeeBreakdown
-                    amount={parseFloat(amount)}
+                    amount={amountValue}
                     networkFee={fees.networkFee}
                     serviceFee={fees.serviceFee}
                     totalFee={fees.totalFee}
@@ -486,9 +675,9 @@ export default function SendMoney() {
                   />
                   
                   {/* Compliance Check Display */}
-                  {parseFloat(amount) > 0 && (() => {
+                  {amountValue > 0 && (() => {
                     const recipientCountry = selectedContact?.countryCode || newRecipient?.name || 'US';
-                    const complianceCheck = checkTransactionCompliance(parseFloat(amount), recipientCountry);
+                    const complianceCheck = checkTransactionCompliance(amountValue, recipientCountry);
                     
                     if (complianceCheck.warnings.length > 0 || !complianceCheck.canProceed) {
                       return (
@@ -536,12 +725,16 @@ export default function SendMoney() {
                 size="lg"
                 className="w-full"
                 onClick={handleAmountSubmit}
-                disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > (user?.usdcBalance || 0)}
+                disabled={Boolean(amountError) || isNetworkOffline}
               >
-                {!amount || parseFloat(amount) <= 0 ? (
+                {!amount || amountValue <= 0 ? (
                   'Enter amount to continue'
-                ) : parseFloat(amount) > (user?.usdcBalance || 0) ? (
+                ) : isNetworkOffline ? (
+                  'Network offline'
+                ) : amountValue > (user?.usdcBalance || 0) ? (
                   'Insufficient balance'
+                ) : amountValue > MAX_TRANSFER_AMOUNT ? (
+                  `Max $${MAX_TRANSFER_AMOUNT.toLocaleString()} allowed`
                 ) : (
                   <>
                     Review Transfer
@@ -555,6 +748,8 @@ export default function SendMoney() {
           {/* Step 3: Confirm */}
           {step === 'confirm' && (selectedContact || newRecipient) && (
             <div className="space-y-6 animate-fade-in">
+              <NetworkStatusIndicator network={network} />
+
               {/* Transfer Summary */}
               <div className="bg-card rounded-2xl p-6 shadow-soft">
                 <div className="text-center mb-6">
@@ -576,7 +771,7 @@ export default function SendMoney() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">You're sending</span>
-                    <span className="text-2xl font-bold text-foreground">${parseFloat(amount).toFixed(2)} USDC</span>
+                    <span className="text-2xl font-bold text-foreground">${amountValue.toFixed(2)} USDC</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -605,7 +800,9 @@ export default function SendMoney() {
                         <Globe2 className="w-4 h-4 text-blue-600" />
                         <span className="font-medium text-blue-900 dark:text-blue-100">Network</span>
                       </div>
-                      <span className="text-blue-700 dark:text-blue-300 font-semibold">Stellar Mainnet</span>
+                      <span className="text-blue-700 dark:text-blue-300 font-semibold">
+                        {network.status === 'offline' ? 'Offline' : `Stellar Mainnet • ${network.latencyMs ?? '--'} ms`}
+                      </span>
                     </div>
                   </div>
 
@@ -626,6 +823,12 @@ export default function SendMoney() {
                 totalFee={fees.totalFee}
                 recipientGets={fees.recipientGets}
               />
+
+              {submissionError && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {submissionError}
+                </div>
+              )}
 
               {/* Speed & Security Assurance */}
               <div className="grid grid-cols-2 gap-3">
@@ -710,7 +913,7 @@ export default function SendMoney() {
 
               {/* Final CTA */}
               <CompliancePreCheck
-                amount={parseFloat(amount)}
+                amount={amountValue}
                 destination={selectedContact?.countryCode || newRecipient?.name || 'US'}
               >
                 <Button
@@ -718,17 +921,22 @@ export default function SendMoney() {
                   size="lg"
                   className="w-full"
                   onClick={handleConfirmSend}
-                  disabled={isProcessing}
+                  disabled={isProcessing || Boolean(amountError) || isNetworkOffline}
                 >
                   {isProcessing ? (
                     <div className="flex items-center gap-2">
                       <div className="animate-spin w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"></div>
                       <span>Sending money...</span>
                     </div>
+                  ) : isNetworkOffline ? (
+                    <>
+                      <CloudOff className="w-5 h-5" />
+                      Network offline
+                    </>
                   ) : (
                     <>
                       <Send className="w-5 h-5" />
-                      Send ${parseFloat(amount).toFixed(2)}
+                      Send ${amountValue.toFixed(2)}
                     </>
                   )}
                 </Button>
